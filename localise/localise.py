@@ -39,11 +39,6 @@ def get_configuration(args):
     with open(config_file, 'r') as ymlfile:
         cfg = yaml.load(ymlfile)
 
-    if not 'api' in cfg or not 'token' in cfg['api'] or not cfg['api']['token']:
-        raise ConfigException('Missing token value in config file')
-    if not 'translations' in cfg:
-        raise ConfigException('No translation files defined in config file')
-
     return cfg
 
 
@@ -55,20 +50,31 @@ def command(args):
             print(e.message)
             return
 
-    if args.command == 'push':
-        push(configuration, args)
-    elif args.command == 'pull':
-        pull(configuration, args)
-    elif args.command == 'config':
-        config(args)
-    else:
-        sys.exit(Fore.RED + "Not a valid command \"%s\"! Did you mean config, push, or pull?" % (
-        args.command) + Style.RESET_ALL)
+    try:
+        if args.command == 'list':
+            print("Available projects:")
+            for section in configuration:
+                print(section)
+        elif args.command == 'push':
+            check_config_section(configuration, args.project)
+            push(configuration[args.project], args)
+        elif args.command == 'pull':
+            check_config_section(configuration, args.project)
+            pull(configuration[args.project], args)
+        elif args.command == 'config':
+            config(args)
+        else:
+            sys.exit(Fore.RED + "Not a valid command \"%s\"! Did you mean config, push, or pull?" % (
+            args.command) + Style.RESET_ALL)
+    except ConfigException as e:
+        print(e.message)
+        return
 
 
 def parse_args():
     p = argparse.ArgumentParser(description='Localise')
-    p.add_argument('command', nargs='?', help='Specify command: push, pull, config')
+    p.add_argument('command', help='Specify command: push, pull, config, list')
+    p.add_argument('project', nargs='?', help='Specify project name')
 
     p.add_argument("-c", "--config", dest="config_file", help="Specify config file", metavar="FILE")
     p.add_argument('--verbose', '-v', action='count')
@@ -79,10 +85,20 @@ def parse_args():
 
 
 def main():
+    if sys.version_info >= (3, 0):
+        sys.exit('Sorry, Python >= 3.0 is not supported')
+
     init(autoreset=True)
     args = parse_args()
     command(args)
 
+def check_config_section(cfg, section):
+    if not section in cfg:
+        raise ConfigException('Unknown project identificator "%s"' % (section))
+    if not 'api' in cfg[section] or not 'token' in cfg[section]['api'] or not cfg[section]['api']['token']:
+        raise ConfigException('Missing token value in config file')
+    if not 'translations' in cfg[section]:
+        raise ConfigException('No translation files defined in config file')
 
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
